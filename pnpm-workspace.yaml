@@ -1,0 +1,17 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# pnpm 12 blocks lifecycle scripts by default; these packages need them
+# (chromium download, native binaries, css engine).
+allowBuilds:
+  puppeteer: true
+  puppeteer-core: true
+  "@tailwindcss/oxide": true
+  esbuild: true
+  sharp: true
+  "@swc/core": true
+  workerd: true
+  unrs-resolver: true
+  protobufjs: true
+  msgpackr-extract: true

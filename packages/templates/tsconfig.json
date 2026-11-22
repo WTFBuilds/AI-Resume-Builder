@@ -1,0 +1,7 @@
+{
+  "extends": "@airesume/config/tsconfig.react.json",
+  "compilerOptions": {
+    "jsx": "react-jsx"
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}

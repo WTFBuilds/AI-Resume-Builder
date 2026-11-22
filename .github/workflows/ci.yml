@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    name: Typecheck · Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        # pnpm version is read from package.json "packageManager" (pnpm@12.21.0)
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+        env:
+          DATABASE_URL: postgres://ci:ci@localhost:5432/airesume_ci
+          BETTER_AUTH_SECRET: ci-secret-not-used-at-runtime
+
+      # ESLint is deferred to Phase 2: eslint-config-next's legacy-config patch
+      # is incompatible with pnpm's isolated layout under ESLint 9 flat config.
+      # Placeholder for e2e (Playwright) — wired in Phase 1 hardening:
+      # - name: E2E smoke
+      #   run: pnpm e2e
