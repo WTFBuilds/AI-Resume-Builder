@@ -1,5 +1,6 @@
 import * as React from "react";
 
+import { embeddedFontCss, SANS_STACK, SERIF_STACK } from "../fontfaces";
 import type { ReactNode } from "react";
 import type { ResumeConfig } from "../schema";
 
@@ -9,12 +10,17 @@ export const PAGE_SIZES = {
 } as const;
 
 export const FONT_STACKS = {
-  sans: `-apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif`,
-  serif: `Georgia, "Times New Roman", Times, serif`,
+  sans: SANS_STACK,
+  serif: SERIF_STACK,
 } as const;
 
 export function resolveFont(config: ResumeConfig, templateDefault: "sans" | "serif"): string {
   return FONT_STACKS[config.font === "template" ? templateDefault : config.font];
+}
+
+/** @font-face rules for the embedded print fonts — prepend to template CSS. */
+export function fontFaceCss(): string {
+  return embeddedFontCss();
 }
 
 export interface DensityMetrics {
@@ -57,7 +63,7 @@ export function Doc({ title, css, children }: DocOptions) {
   );
 }
 
-/** Base reset + page geometry shared by every template. */
+/** Base reset + page geometry + embedded fonts, shared by every template. */
 export function baseCss(opts: {
   page: (typeof PAGE_SIZES)[keyof typeof PAGE_SIZES];
   font: string;
@@ -66,6 +72,7 @@ export function baseCss(opts: {
 }): string {
   const { page, font, metrics } = opts;
   return `
+${fontFaceCss()}
 * { box-sizing: border-box; margin: 0; padding: 0; }
 @page { size: ${page.css}; margin: 0; }
 html, body { background: #fff; }
