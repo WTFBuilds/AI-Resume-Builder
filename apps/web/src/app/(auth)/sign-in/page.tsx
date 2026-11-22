@@ -4,11 +4,20 @@ import { googleOAuthEnabled, githubOAuthEnabled, authClient } from "@airesume/au
 import { Github, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { Suspense, useState, type FormEvent } from "react";
 import { Button, Card, Field, Input } from "@airesume/ui";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
 
+// useSearchParams requires a Suspense boundary during static prerender
 export default function SignInPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignInForm />
+    </Suspense>
+  );
+}
+
+function SignInForm() {
   const router = useRouter();
   const params = useSearchParams();
   const next = params.get("next") ?? "/dashboard";

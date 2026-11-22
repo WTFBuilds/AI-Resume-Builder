@@ -322,7 +322,7 @@ All commands run from the repo root.
 | `pnpm db:migrate` | Apply generated migrations |
 | `pnpm db:seed` | Upsert the 4 templates |
 | `pnpm db:studio` | Open Drizzle Studio (DB browser) |
-| `pnpm lint` | ESLint (web app) |
+
 
 ## Troubleshooting
 
