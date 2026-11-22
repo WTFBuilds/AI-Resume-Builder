@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { and, desc, eq, ilike, sql } from "drizzle-orm";
 import {
   defaultResumeConfig,
@@ -6,7 +7,15 @@ import {
   ResumeDataSchema,
 } from "@airesume/templates";
 import { db } from "./client";
-import { exportJob, resume, resumeTag, resumeVersion, tag, template } from "./schema";
+import {
+  exportJob,
+  resume,
+  resumeTag,
+  resumeVersion,
+  shareLink,
+  tag,
+  template,
+} from "./schema";
 
 /* ── errors ──────────────────────────────────────────────────────────────── */
 
@@ -26,6 +35,12 @@ export class ValidationError extends Error {
   constructor(message = "Invalid document") {
     super(message);
     this.name = "ValidationError";
+  }
+}
+export class QuotaError extends Error {
+  constructor(message = "Plan limit reached") {
+    super(message);
+    this.name = "QuotaError";
   }
 }
 export class ConflictError extends Error {
@@ -50,19 +65,37 @@ export const VERSION_INTERVAL_MS = 5 * 60 * 1000;
 
 /* ── resumes ─────────────────────────────────────────────────────────────── */
 
+/** Free-plan limits (plan.md §13). Stripe enforcement lands in P2b. */
+export const FREE_ACTIVE_RESUME_LIMIT = 5;
+
 export async function createResume(
   userId: string,
-  input: { title: string; templateId: string },
+  input: { title: string; templateId: string; data?: unknown },
 ): Promise<ResumeRow> {
   const tpl = await db.select().from(template).where(eq(template.id, input.templateId));
   if (tpl.length === 0) throw new ValidationError("Unknown template");
+
+  const [{ n }] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(resume)
+    .where(and(eq(resume.userId, userId), eq(resume.status, "active")));
+  if (n >= FREE_ACTIVE_RESUME_LIMIT) {
+    throw new QuotaError(
+      `Free plan allows ${FREE_ACTIVE_RESUME_LIMIT} active resumes — archive one or upgrade to Pro.`,
+    );
+  }
+
+  const data = input.data === undefined ? emptyResumeData() : input.data;
+  const parsedData = ResumeDataSchema.safeParse(data);
+  if (!parsedData.success) throw new ValidationError("Invalid resume data");
+
   const [row] = await db
     .insert(resume)
     .values({
       userId,
       title: input.title.trim() || "Untitled resume",
       templateId: input.templateId,
-      data: emptyResumeData(),
+      data: parsedData.data,
       config: defaultResumeConfig(),
     })
     .returning();
@@ -346,6 +379,90 @@ export async function listTagsForResume(resumeId: string): Promise<TagRow[]> {
     .innerJoin(tag, eq(tag.id, resumeTag.tagId))
     .where(eq(resumeTag.resumeId, resumeId))
     .then((rows) => rows.map((r) => r.t));
+}
+
+export async function setResumeTags(
+  userId: string,
+  resumeId: string,
+  tagIds: string[],
+): Promise<void> {
+  await requireResume(userId, resumeId);
+  await db.transaction(async (tx) => {
+    await tx.delete(resumeTag).where(eq(resumeTag.resumeId, resumeId));
+    if (tagIds.length > 0) {
+      // keep only tags owned by this user
+      const owned = await tx
+        .select({ id: tag.id })
+        .from(tag)
+        .where(and(eq(tag.userId, userId), sql`${tag.id} = any(${tagIds}::uuid[])`));
+      if (owned.length > 0) {
+        await tx
+          .insert(resumeTag)
+          .values(owned.map((o) => ({ resumeId, tagId: o.id })))
+          .onConflictDoNothing();
+      }
+    }
+  });
+}
+
+/* ── share links ─────────────────────────────────────────────────────────── */
+
+export type ShareLinkRow = typeof shareLink.$inferSelect;
+
+export async function createShareLink(
+  userId: string,
+  resumeId: string,
+  options: { expiresAt?: Date } = {},
+): Promise<ShareLinkRow> {
+  await requireResume(userId, resumeId);
+  const [row] = await db
+    .insert(shareLink)
+    .values({
+      resumeId,
+      token: randomBytes(18).toString("base64url"), // 24 chars, URL-safe
+      expiresAt: options.expiresAt ?? null,
+    })
+    .returning();
+  return row;
+}
+
+export async function listShareLinks(userId: string, resumeId: string): Promise<ShareLinkRow[]> {
+  await requireResume(userId, resumeId);
+  return db
+    .select()
+    .from(shareLink)
+    .where(eq(shareLink.resumeId, resumeId))
+    .orderBy(desc(shareLink.createdAt));
+}
+
+export async function revokeShareLink(
+  userId: string,
+  resumeId: string,
+  shareId: string,
+): Promise<void> {
+  await requireResume(userId, resumeId);
+  const rows = await db.select().from(shareLink).where(eq(shareLink.id, shareId));
+  const row = rows[0];
+  if (!row || row.resumeId !== resumeId) throw new NotFoundError("Share link not found");
+  await db.update(shareLink).set({ revoked: true }).where(eq(shareLink.id, shareId));
+}
+
+/** Public lookup — no auth, by token. Only active, non-revoked, unexpired. */
+export async function getActiveShareByToken(token: string): Promise<{
+  share: ShareLinkRow;
+  resume: ResumeRow;
+} | null> {
+  const rows = await db
+    .select({ s: shareLink, r: resume })
+    .from(shareLink)
+    .innerJoin(resume, eq(resume.id, shareLink.resumeId))
+    .where(eq(shareLink.token, token));
+  const row = rows[0];
+  if (!row) return null;
+  if (row.s.revoked) return null;
+  if (row.s.expiresAt && row.s.expiresAt.getTime() < Date.now()) return null;
+  if (row.r.status === "trashed") return null;
+  return { share: row.s, resume: row.r };
 }
 
 /* ── templates ───────────────────────────────────────────────────────────── */

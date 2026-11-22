@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
+// Vercel manages the output itself; standalone is for our Docker/ECS path.
+const isVercel = process.env.VERCEL === "1";
+
 const config: NextConfig = {
-  output: "standalone",
+  output: isVercel ? undefined : "standalone",
   transpilePackages: [
     "@airesume/db",
     "@airesume/auth",

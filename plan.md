@@ -458,13 +458,16 @@ AI-Resume-Builder/
 - [ ] Playwright smoke in CI
 - [ ] Tags UI (API + schema ready)
 
-### Phase 2 — Heavy users & growth (weeks 6–9)
-- [ ] Version history UI (timeline, diff summary, restore)
-- [ ] View-only share links; JSON-Resume import/export
-- [ ] Stripe billing (Free/Pro), quotas enforcement, upgrade flows
-- [ ] better-auth `organization` plugin → teams & shared resumes; `twoFactor`
-- [ ] Multi-page pagination polish, cover letter doc type
-- [ ] More templates (premium tier)
+### Phase 2 — Heavy users & growth (weeks 6–9) — 2a ✅ done, 2b next
+- [x] Version history UI (timeline, manual saves, restore with pre-restore safety snapshot)
+- [x] View-only share links (public /share/… noindex viewer, create/revoke, optional expiry)
+- [x] JSON import/export (AIResume v1 envelope + bare JSON-Resume, strict zod validation)
+- [x] Tags UI (create/assign/filter, chips on rows, sidebar list)
+- [x] Quota scaffolding (free plan: 5 active resumes, 402 + upgrade messaging; Stripe-ready seam)
+- [ ] 2b: Stripe billing (Free/Pro), plan gating upgrades
+- [ ] 2b: better-auth `organization` plugin → teams & shared resumes; `twoFactor`
+- [ ] 2b: Multi-page pagination polish, cover letter doc type
+- [ ] 2b: More templates (premium tier)
 
 ### Phase 3 — AI (weeks 10+, §19)
 - [ ] AI writer: bullet/summary generation & improvement, tone controls

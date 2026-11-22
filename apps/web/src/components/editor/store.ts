@@ -39,6 +39,8 @@ export interface EditorActions {
   redo: () => void;
   flush: () => Promise<void>;
   resolveConflict: (mode: "mine" | "theirs") => void;
+  /** Replace the whole document from a version snapshot (History → Restore). */
+  restoreSnapshot: (snapshot: { title: string; data: ResumeData; config: ResumeConfig }) => void;
 }
 
 const SAVE_DEBOUNCE_MS = 1500;
@@ -199,6 +201,17 @@ export function createEditorStore(init: { resumeId: string; doc: EditorDoc; upda
           saveTimer = null;
         }
         if (get().saveState !== "saved") await doSave();
+      },
+
+      restoreSnapshot: (snapshot) => {
+        const { revision } = get();
+        set({
+          title: snapshot.title,
+          data: clone(snapshot.data),
+          config: clone(snapshot.config),
+          revision: revision + 1,
+        });
+        scheduleSave();
       },
 
       resolveConflict: (mode) => {

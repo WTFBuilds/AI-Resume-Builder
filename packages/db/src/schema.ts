@@ -165,5 +165,20 @@ export const resumeTag = pgTable(
   (t) => [primaryKey({ columns: [t.resumeId, t.tagId] })],
 );
 
-/* Phase 2+ shapes are specified in plan.md §7; tables are created when needed:
-   share_link, user_plan, ai_job */
+export const shareLink = pgTable(
+  "share_link",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    resumeId: uuid("resume_id")
+      .notNull()
+      .references(() => resume.id, { onDelete: "cascade" }),
+    token: text("token").notNull().unique(),
+    revoked: boolean("revoked").notNull().default(false),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("share_link_resume_idx").on(t.resumeId, t.createdAt)],
+);
+
+/* Later-phase shapes are specified in plan.md §7; tables are created when
+   needed: user_plan (Stripe, P2b), ai_job (P3) */

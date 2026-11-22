@@ -1,4 +1,4 @@
-import { listResumes, listTagsForResume } from "@airesume/db";
+import { listResumes, listTags, listTagsForResume } from "@airesume/db";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Badge } from "@airesume/ui";
@@ -14,7 +14,10 @@ export default async function DashboardPage({
 }) {
   const user = await requireUser();
   const sp = await searchParams;
-  const { items } = await listResumes(user.id, { status: "active", q: sp.q, tagId: sp.tag });
+  const [{ items }, tags] = await Promise.all([
+    listResumes(user.id, { status: "active", q: sp.q, tagId: sp.tag }),
+    listTags(user.id),
+  ]);
 
   const listItems: ResumeListItem[] = await Promise.all(
     items.map(async (r) => ({
@@ -42,7 +45,11 @@ export default async function DashboardPage({
           </Link>
         </p>
       </div>
-      <ResumeList items={listItems} status="active" />
+      <ResumeList
+        items={listItems}
+        status="active"
+        allTags={tags.map((t) => ({ id: t.id, name: t.name }))}
+      />
     </main>
   );
 }
