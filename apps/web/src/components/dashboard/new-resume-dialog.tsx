@@ -43,8 +43,9 @@ export function NewResumeDialog({
         toast.error(body.error ?? "Could not create resume");
         return;
       }
-      onOpenChange(false);
+      // navigate FIRST — the dialog's close-side cleanup must not race the push
       router.push(`/resume/${body.id}`);
+      onOpenChange(false);
     } finally {
       setCreating(false);
     }

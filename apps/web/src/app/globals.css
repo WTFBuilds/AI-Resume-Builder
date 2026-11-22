@@ -1,6 +1,14 @@
 @import "tailwindcss";
 @import "@airesume/ui/tokens.css";
 
+/*
+ * Monorepo sources: Tailwind's automatic detection only roots at this app's
+ * cwd, so classes used exclusively in workspace packages (dialog overlays,
+ * menu portals, editor primitives…) must be declared explicitly.
+ */
+@source "../../../../packages/ui/src";
+@source "../../../../packages/templates/src";
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {

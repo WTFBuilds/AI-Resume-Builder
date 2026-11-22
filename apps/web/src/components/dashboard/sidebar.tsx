@@ -13,12 +13,12 @@ import {
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { authClient, signOut } from "@airesume/auth/client";
 import { Badge, Button, Dropdown, MenuItem, MenuLabel, MenuSeparator } from "@airesume/ui";
 import { NewResumeDialog } from "./new-resume-dialog";
 import { useTheme } from "./theme-toggle";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface SidebarProps {
   user: { name: string; email: string };
@@ -31,11 +31,16 @@ export function DashboardSidebar({ user, tags }: SidebarProps) {
   const activeTag = params.get("tag");
   const newParam = params.get("new");
   const [newOpen, setNewOpen] = useState(false);
+  const openedFromParam = useRef(false);
   const { theme, toggle } = useTheme();
 
-  // /dashboard?new=1 (toolbar button) or ?new=<slug> (from /templates) opens the picker
+  // /dashboard?new=1 (toolbar link) or ?new=<slug> (from /templates) opens the
+  // picker once per mount — no URL manipulation here, it races router.push().
   useEffect(() => {
-    if (newParam) setNewOpen(true);
+    if (newParam && !openedFromParam.current) {
+      openedFromParam.current = true;
+      setNewOpen(true);
+    }
   }, [newParam]);
 
   const link = (href: string, label: string, icon: React.ReactNode, active: boolean) => (
@@ -153,13 +158,7 @@ export function DashboardSidebar({ user, tags }: SidebarProps) {
 
       <NewResumeDialog
         open={newOpen}
-        onOpenChange={(v) => {
-          setNewOpen(v);
-          if (!v && newParam) {
-            // clean the ?new= param so a refresh doesn't reopen the picker
-            window.history.replaceState(null, "", pathname + (activeTag ? `?tag=${activeTag}` : ""));
-          }
-        }}
+        onOpenChange={setNewOpen}
         initialTemplate={newParam && newParam !== "1" ? newParam : undefined}
       />
     </>
