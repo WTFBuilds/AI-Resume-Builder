@@ -1,0 +1,67 @@
+/*
+ * AIResume design tokens — quiet, professional, no gradients.
+ * Mapped into Tailwind via @theme inline in the app's globals.css.
+ */
+
+:root {
+  --canvas: #fafafa;
+  --surface: #ffffff;
+  --surface-2: #f4f4f5;
+  --ink: #18181b;
+  --ink-2: #52525b;
+  --muted: #a1a1aa;
+  --line: #e4e4e7;
+  --line-strong: #d4d4d8;
+
+  --accent: #166534;
+  --accent-hover: #14532d;
+  --accent-soft: #ecfdf5;
+  --accent-line: #bbf7d0;
+
+  --danger: #dc2626;
+  --danger-soft: #fef2f2;
+  --warning: #b45309;
+  --warning-soft: #fffbeb;
+  --info: #1d4ed8;
+  --info-soft: #eff6ff;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.08);
+  --shadow-lg: 0 16px 40px rgb(0 0 0 / 0.14);
+
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+
+  --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Inter, Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-serif: Georgia, "Times New Roman", Times, serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.dark {
+  --canvas: #09090b;
+  --surface: #111113;
+  --surface-2: #1b1b1f;
+  --ink: #fafafa;
+  --ink-2: #a1a1aa;
+  --muted: #71717a;
+  --line: #26262a;
+  --line-strong: #3f3f46;
+
+  --accent: #16a34a;
+  --accent-hover: #22c55e;
+  --accent-soft: #052e16;
+  --accent-line: #14532d;
+
+  --danger: #ef4444;
+  --danger-soft: #2c1212;
+  --warning: #d97706;
+  --warning-soft: #271a05;
+  --info: #60a5fa;
+  --info-soft: #0c1a33;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.45);
+  --shadow-lg: 0 16px 40px rgb(0 0 0 / 0.6);
+}

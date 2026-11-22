@@ -1,0 +1,23 @@
+# deps / build
+node_modules/
+.next/
+dist/
+.turbo/
+*.tsbuildinfo
+
+# env
+.env
+.env.*
+!.env.example
+
+# local runtime data (dev exports, pg data)
+.data/
+
+# infra
+infra/terraform/.terraform/
+infra/terraform/*.tfstate*
+infra/terraform/*.tfplan
+
+# misc
+.DS_Store
+*.log

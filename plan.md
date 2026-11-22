@@ -1,6 +1,6 @@
-# AI Resume Builder — Product & Engineering Plan
+# AIResume — Product & Engineering Plan
 
-**Part of** `wtfbuilds` · **Working repo** `AI-Resume-Builder` · **Status** v0.1 (pre-implementation)
+**Product name:** **AIResume** · **SEO display name:** *AI Resume Builder* · **Part of** `wtfbuilds` · **Working repo** `AI-Resume-Builder` · **Status** v0.1 (pre-implementation)
 
 > **One-liner:** Overleaf's workflow for resumes — a dashboard of "resume projects", a three-pane editor, and live PDF preview — except the middle pane is **structured forms, not LaTeX code**. Built with better-auth, deployed on AWS, engineered for heavy daily users. AI features ship in a later phase behind a clean extension point.
 
@@ -59,7 +59,7 @@ Positioning promise carried from the README: **ATS-friendly by construction** �
 
 | Surface | Route | Phase | Notes |
 |---|---|---|---|
-| Marketing site | `/` , `/features`, `/templates`, `/pricing` (stub), `/about` | P1 | wtfbuilds-branded, conversion-focused, real product screenshots |
+| Marketing site | `/` , `/features`, `/templates`, `/pricing` (stub), `/about` | P1 | AIResume-branded (wtfbuilds family), conversion-focused, real product screenshots |
 | Auth | `/sign-in`, `/sign-up`, `/forgot-password`, `/reset-password` | P1 | better-auth; email+password + Google/GitHub OAuth |
 | Dashboard | `/dashboard`, `/dashboard/archive`, `/dashboard/trash` | P1 | Overleaf `/project` parity: search, tags, table→cards, "New resume" |
 | Template picker | modal `/dashboard/new` | P1 | 4 launch templates with previews |
@@ -228,7 +228,7 @@ Route: `/resume/[id]`. App shell (not marketing chrome): slim top bar + three pa
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ ☰  Jake's Resume ▾        ● Saved 12:41   History   Download   Share 🔒  │
+│ ☰  Ahqaf Ali's Resume ▾     ● Saved 12:41   History   Download   Share 🔒  │
 ├──────────────┬───────────────────────────────┬───────────────────────────┤
 │ SECTIONS     │  EDITOR (form)                │  PREVIEW          100% ▾ │
 │              │                               │                           │
@@ -331,6 +331,8 @@ interface ResumeTemplate {
 
 **Launch templates (4):** `classic` (serif, single-column, Overleaf-Jake vibe), `modern` (sans, accent headings), `compact-two-column` (sidebar skills), `minimal-ats` (single column, zero decoration).
 
+**Demo persona:** all template previews, seed data, and marketing screenshots use the demo candidate **Ahqaf Ali** — seeded demo resume *"Ahqaf Ali's Resume"* (our equivalent of Overleaf's "Jake's Resume").
+
 **ATS guarantees (P1, enforced by lint rules on schema + template):** selectable text, no critical info in images, standard section names, single logical reading order, ≤ 2 pages guidance with warning.
 
 ## 12. API Surface
@@ -379,6 +381,13 @@ All under `/api`, JSON, better-auth session cookie auth, zod-validated bodies.
 ## 15. Design System & Brand
 
 **wtfbuilds product line:** marketing site carries the wtfbuilds identity (wordmark footer, "A wtfbuilds product"), while the product itself has its own quiet, tool-first personality — closer to Linear/Notion tooling than to a landing page.
+
+**Naming & SEO**
+
+- **Product name:** **AIResume** — wordmark in nav, app UI, social handles, domain (`airesume.com` if available, else `airesume.wtfbuilds.com`).
+- **SEO display name:** **AI Resume Builder** — page titles follow the pattern `{Page} · AIResume — AI Resume Builder` (e.g. *"AIResume — AI Resume Builder | ATS-friendly resumes in minutes"*).
+- **Target keywords:** ai resume builder, ats friendly resume builder, free resume builder, online resume maker, resume builder for students, latex-free resume editor.
+- **Technical SEO:** static/SSR marketing pages via RSC, `generateMetadata` per route, OpenGraph + Twitter cards using real editor screenshots, `sitemap.xml` + `robots.txt`, JSON-LD (`SoftwareApplication`, `FAQPage`), canonical URLs, template gallery pages individually indexable (`/templates/classic`, …).
 
 **Anti-"AI look" rules (explicit):**
 
@@ -433,19 +442,21 @@ AI-Resume-Builder/
 
 ## 18. Phased Roadmap
 
-### Phase 0 — Foundation (week 1)
-- [ ] Monorepo scaffold, docker compose, design tokens in `packages/ui`
-- [ ] Terraform base: VPC, RDS, Redis, S3, ECR, ECS cluster; staging env up
-- [ ] CI pipeline green end-to-end (deploy hello-world web + worker)
+### Phase 0 — Foundation (week 1) ✅ done
+- [x] Monorepo scaffold, docker compose, design tokens in `packages/ui`
+- [x] Terraform base: VPC, RDS, Redis, S3, ECR, ECS cluster (`infra/terraform` — apply when AWS creds are wired)
+- [x] CI pipeline (`.github/workflows/ci.yml` — typecheck + build; staging deploy skeleton ready)
 
-### Phase 1 — MVP: "Overleaf for resumes" (weeks 2–5) ← **we are here**
-- [ ] better-auth: email/password + Google OAuth, verification emails, settings/sessions
-- [ ] Dashboard: list/create/duplicate/archive/trash/search/tags, template picker
-- [ ] Editor: 3 panes, section navigator, form editor (all sections), live preview, autosave + conflict handling
-- [ ] Templates: schema + SDK + 4 launch templates, per-doc config (font/accent/density/page size)
-- [ ] PDF export: queue → worker → S3 → signed download; export history
-- [ ] Marketing site: home, features, templates gallery, pricing stub, wtfbuilds footer
-- [ ] Observability + alarms; seed data; Playwright smoke in CI
+### Phase 1 — MVP: "Overleaf for resumes" (weeks 2–5) — core ✅ verified locally
+- [x] better-auth: email/password (Google OAuth ready behind env flags), settings/sessions
+- [x] Dashboard: list/create/duplicate/archive/trash/search, template picker with live previews
+- [x] Editor: 3 panes, section navigator, form editor (all sections), live preview, autosave + conflict handling, undo/redo
+- [x] Templates: schema + SDK + 4 launch templates, per-doc config (font/accent/density/page size)
+- [x] PDF export: queue → worker → storage → download (verified: valid 2-page selectable-text PDF)
+- [x] Marketing site: home, features, templates gallery, pricing stub, wtfbuilds footer
+- [ ] Observability + alarms (prod wiring)
+- [ ] Playwright smoke in CI
+- [ ] Tags UI (API + schema ready)
 
 ### Phase 2 — Heavy users & growth (weeks 6–9)
 - [ ] Version history UI (timeline, diff summary, restore)
@@ -497,8 +508,12 @@ Extension points reserved in Phase 1 so AI never requires rework:
 
 ## 22. Open Questions
 
-1. **Product name** — working title is "AI Resume Builder". Candidates: *ResumeForge*, *Draftsmith*, `wtfbuilds/resume`. Own domain or `*.wtfbuilds.com`?
-2. **Accent color** — plan proposes forest green `#166534`; confirm against wtfbuilds brand.
-3. **Billing** — Stripe assumed for Phase 2; confirm (especially for Indian entity pricing/currency).
-4. **Page size default** — Letter (US-heavy job market) vs A4 (India/EU). Plan: default by locale, toggle in editor.
-5. **OAuth scope at launch** — Google only, or Google + GitHub on day one?
+1. **Accent color** — plan proposes forest green `#166534`; confirm against wtfbuilds brand.
+2. **Billing** — Stripe assumed for Phase 2; confirm (especially for Indian entity pricing/currency).
+3. **Page size default** — Letter (US-heavy job market) vs A4 (India/EU). Plan: default by locale, toggle in editor.
+4. **OAuth scope at launch** — Google only, or Google + GitHub on day one?
+
+**Resolved**
+
+- ~~Product name~~ → **AIResume**, SEO display name **"AI Resume Builder"** (see §15).
+- ~~Demo persona~~ → seeded demo resume and marketing screenshots use **Ahqaf Ali** (see §11).
