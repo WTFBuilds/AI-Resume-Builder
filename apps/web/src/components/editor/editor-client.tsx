@@ -25,6 +25,8 @@ import {
   resolveSectionOrder,
 } from "@airesume/templates";
 import { clockTime } from "@/lib/format";
+import { HistoryPanel } from "./history-panel";
+import { ShareDialog } from "./share-dialog";
 import { PreviewPane } from "./preview-pane";
 import { SectionNav } from "./section-nav";
 import { SectionForm } from "./section-forms";
@@ -55,6 +57,8 @@ export function EditorClient({
 
   const [activeKey, setActiveKey] = useState("basics");
   const [mobileTab, setMobileTab] = useState<"edit" | "preview">("edit");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   // keyboard shortcuts + unsaved-changes guard
   useEffect(() => {
@@ -197,16 +201,10 @@ export function EditorClient({
             </label>
           </div>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled
-            title="Version history — coming in Phase 2"
-            className="hidden sm:inline-flex"
-          >
+          <Button variant="ghost" size="sm" className="hidden sm:inline-flex" onClick={() => setHistoryOpen(true)}>
             <History /> History
           </Button>
-          <Button variant="ghost" size="sm" disabled title="Sharing — coming in Phase 2" className="hidden sm:inline-flex">
+          <Button variant="ghost" size="sm" className="hidden sm:inline-flex" onClick={() => setShareOpen(true)}>
             <Share2 /> Share
           </Button>
         </div>
@@ -297,6 +295,9 @@ export function EditorClient({
           </button>
         ))}
       </div>
+
+      {historyOpen ? <HistoryPanel store={store} onClose={() => setHistoryOpen(false)} /> : null}
+      {shareOpen ? <ShareDialog resumeId={resumeId} onClose={() => setShareOpen(false)} /> : null}
     </div>
   );
 }

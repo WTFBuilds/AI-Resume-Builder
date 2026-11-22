@@ -19,6 +19,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "bullmq": "^5.0.0",
     "better-auth": "^1.2.0",
+    "drizzle-orm": "^0.44.0",
     "ioredis": "^5.4.0",
     "lucide-react": "^0.475.0",
     "next": "^15.5.0",
