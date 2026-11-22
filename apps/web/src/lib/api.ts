@@ -5,6 +5,7 @@ import {
   ConflictError,
   ForbiddenError,
   NotFoundError,
+  QuotaError,
   ValidationError,
 } from "@airesume/db";
 import type { User } from "@airesume/auth/server";
@@ -31,6 +32,7 @@ export function handleApiError(err: unknown): NextResponse {
   if (err instanceof NotFoundError) return jsonError(404, { error: err.message });
   if (err instanceof ForbiddenError) return jsonError(403, { error: err.message });
   if (err instanceof ValidationError) return jsonError(422, { error: err.message });
+  if (err instanceof QuotaError) return jsonError(402, { error: err.message, code: "quota" });
   if (err instanceof ConflictError) {
     return NextResponse.json(
       {

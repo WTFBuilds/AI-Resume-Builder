@@ -38,13 +38,17 @@ Part of the **wtfbuilds** product family. The full product & engineering plan li
 **Phase 1 MVP core — built and verified locally:**
 
 - ✅ Email + password auth ([better-auth](https://better-auth.com)), sessions, account settings
-- ✅ Dashboard: resume list, template picker with live previews, archive/trash, search
+- ✅ Dashboard: resume list, template picker with live previews, archive/trash, search, **tags**
 - ✅ Editor: section navigator, structured forms, drag-to-reorder, autosave with conflict protection, undo/redo, mobile layout
 - ✅ Live preview: real template output, updates as you type (no "Recompile" button needed)
 - ✅ PDF export: queue → worker → headless Chromium → downloadable, ATS-ready PDF
+- ✅ **Version history**: auto snapshots + manual saves, restore with pre-restore safety snapshot
+- ✅ **Share links**: view-only public URLs (`/share/…`, noindex), revoke anytime
+- ✅ **JSON import/export**: portable documents, AIResume + JSON-Resume friendly
+- ✅ **Free-plan quotas**: 5 active resumes, enforced at the API with upgrade messaging
 - ✅ 4 launch templates: **Classic**, **Modern**, **Compact Two-Column**, **Minimal ATS**
 - ✅ Marketing site
-- 🔜 Phase 2: version history UI, share links, Stripe billing, teams
+- 🔜 Phase 2b: Stripe billing, teams (`organization` plugin), two-factor
 - 🔜 Phase 3: AI writer, ATS analysis, job-description tailoring
 
 ## Requirements
@@ -338,8 +342,10 @@ All commands run from the repo root.
 | Port 3000 already in use | `kill $(lsof -t -iTCP:3000 -sTCP:LISTEN)` or run `PORT=3001 pnpm dev:web` (if you change the port, also update `BETTER_AUTH_URL` and `NEXT_PUBLIC_APP_URL` in `.env` for auth/OAuth to work) |
 | `psql: command not found` after brew install | keg-only formula → add `/opt/homebrew/opt/postgresql@16/bin` to PATH (§Step 5 Option B) |
 | Next.js says it "reconfigured your tsconfig.json" | Expected — Next sets `jsx: preserve` itself; harmless |
+| Dev server randomly 500s with `Cannot find module './vendor-chunks/…'` | A `pnpm build` ran while `next dev` was up — they share `.next`. Stop dev, `rm -rf apps/web/.next`, restart |
 | Warning about unreadable `~/.npmrc` | A root-owned leftover file on your machine; harmless — pnpm continues without it |
 | Sign-up says "User already exists" | That email is registered → sign in instead, or use another email |
+| "Free plan allows 5 active resumes" | Quota is enforced — archive or trash one, or bump `FREE_ACTIVE_RESUME_LIMIT` in `packages/db/src/queries.ts` for local testing |
 
 ## Stopping everything
 

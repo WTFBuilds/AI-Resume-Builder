@@ -3,11 +3,13 @@
 import {
   Archive,
   ArchiveRestore,
+  Braces,
   Copy,
   FileText,
   MoreHorizontal,
   Pencil,
   Search,
+  Tag,
   Trash2,
   X,
 } from "lucide-react";
@@ -39,10 +41,12 @@ export interface ResumeListItem {
 export function ResumeList({
   items,
   status,
+  allTags = [],
   searchPlaceholder,
 }: {
   items: ResumeListItem[];
   status: "active" | "archived" | "trashed";
+  allTags?: { id: string; name: string }[];
   searchPlaceholder?: string;
 }) {
   const router = useRouter();
@@ -50,6 +54,7 @@ export function ResumeList({
   const [renameTarget, setRenameTarget] = useState<ResumeListItem | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<ResumeListItem | null>(null);
+  const [tagTarget, setTagTarget] = useState<ResumeListItem | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -156,10 +161,12 @@ export function ResumeList({
                     <RowActions
                       item={item}
                       status={status}
+                      canTag={status === "active"}
                       onRename={() => {
                         setRenameTarget(item);
                         setRenameValue(item.title);
                       }}
+                      onTag={() => setTagTarget(item)}
                       onDelete={() => setConfirmDelete(item)}
                       act={act}
                     />
@@ -188,10 +195,12 @@ export function ResumeList({
                 <RowActions
                   item={item}
                   status={status}
+                  canTag={status === "active"}
                   onRename={() => {
                     setRenameTarget(item);
                     setRenameValue(item.title);
                   }}
+                  onTag={() => setTagTarget(item)}
                   onDelete={() => setConfirmDelete(item)}
                   act={act}
                 />
@@ -271,6 +280,15 @@ export function ResumeList({
           </>
         }
       />
+
+      {tagTarget ? (
+        <TagDialog
+          resume={tagTarget}
+          allTags={allTags}
+          onClose={() => setTagTarget(null)}
+          act={act}
+        />
+      ) : null}
     </div>
   );
 }
@@ -278,16 +296,36 @@ export function ResumeList({
 function RowActions({
   item,
   status,
+  canTag,
   onRename,
+  onTag,
   onDelete,
   act,
 }: {
   item: ResumeListItem;
   status: "active" | "archived" | "trashed";
+  canTag: boolean;
   onRename: () => void;
+  onTag: () => void;
   onDelete: () => void;
   act: (fn: () => Promise<Response>, msg: string) => Promise<void>;
 }) {
+  async function exportJson() {
+    const res = await fetch(`/api/resumes/${item.id}/json`);
+    if (!res.ok) {
+      toast.error("Could not export JSON");
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${item.title.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "resume"}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("JSON downloaded");
+  }
+
   return (
     <Dropdown
       width={200}
@@ -308,6 +346,11 @@ function RowActions({
           <MenuItem icon={<Pencil />} onSelect={onRename}>
             Rename
           </MenuItem>
+          {canTag ? (
+            <MenuItem icon={<Tag />} onSelect={onTag}>
+              Tag…
+            </MenuItem>
+          ) : null}
           <MenuItem
             icon={<Copy />}
             onSelect={() =>
@@ -315,6 +358,9 @@ function RowActions({
             }
           >
             Duplicate
+          </MenuItem>
+          <MenuItem icon={<Braces />} onSelect={exportJson}>
+            Export JSON
           </MenuItem>
           <MenuSeparator />
           <MenuItem
@@ -355,6 +401,9 @@ function RowActions({
 
       {status === "archived" ? (
         <>
+          <MenuItem icon={<Braces />} onSelect={exportJson}>
+            Export JSON
+          </MenuItem>
           <MenuItem
             icon={<ArchiveRestore />}
             onSelect={() =>
@@ -393,6 +442,9 @@ function RowActions({
 
       {status === "trashed" ? (
         <>
+          <MenuItem icon={<Braces />} onSelect={exportJson}>
+            Export JSON
+          </MenuItem>
           <MenuItem
             icon={<ArchiveRestore />}
             onSelect={() =>
@@ -415,5 +467,120 @@ function RowActions({
         </>
       ) : null}
     </Dropdown>
+  );
+}
+
+/** Assign / unassign user tags on one resume. */
+function TagDialog({
+  resume,
+  allTags,
+  onClose,
+  act,
+}: {
+  resume: ResumeListItem;
+  allTags: { id: string; name: string }[];
+  onClose: () => void;
+  act: (fn: () => Promise<Response>, msg: string) => Promise<void>;
+}) {
+  const [selected, setSelected] = useState<string[]>(
+    resume.tags.map((t) => t.id),
+  );
+  const [newName, setNewName] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  const [localTags, setLocalTags] = useState(allTags);
+
+  async function createTag() {
+    const name = newName.trim();
+    if (!name) return;
+    setCreating(true);
+    try {
+      const res = await fetch("/api/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        toast.error(body.error ?? "Could not create tag");
+        return;
+      }
+      setLocalTags((t) => [...t, { id: body.id, name: body.name }]);
+      setSelected((s) => [...s, body.id]);
+      setNewName("");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title={`Tag “${resume.title}”`}
+      description="Tags are private to you — use them to organize campaigns."
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            onClick={async () => {
+              await act(
+                () =>
+                  fetch(`/api/resumes/${resume.id}/tags`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ tagIds: selected }),
+                  }),
+                "Tags updated",
+              );
+              onClose();
+            }}
+          >
+            Save tags
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        {localTags.length > 0 ? (
+          <ul className="space-y-1.5">
+            {localTags.map((t) => (
+              <li key={t.id}>
+                <label className="flex cursor-pointer items-center gap-2.5 rounded-(--radius) px-2 py-1.5 text-sm text-[var(--ink)] hover:bg-[var(--surface-2)]">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(t.id)}
+                    onChange={(e) =>
+                      setSelected((s) =>
+                        e.target.checked ? [...s, t.id] : s.filter((id) => id !== t.id),
+                      )
+                    }
+                    className="size-4 rounded border-[var(--line-strong)] accent-[var(--accent)]"
+                  />
+                  {t.name}
+                </label>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-[var(--ink-2)]">No tags yet — create your first below.</p>
+        )}
+        <div className="flex gap-2 border-t border-[var(--line)] pt-3">
+          <Input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="New tag name"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") createTag();
+            }}
+          />
+          <Button variant="secondary" onClick={createTag} disabled={creating || !newName.trim()}>
+            Add
+          </Button>
+        </div>
+      </div>
+    </Dialog>
   );
 }

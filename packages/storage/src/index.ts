@@ -7,12 +7,15 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { v2 as cloudinary } from "cloudinary";
 
 /**
- * Storage abstraction: local filesystem in dev, S3 in production.
+ * Storage abstraction:
+ *   local      — filesystem (dev), anchored to the monorepo root
+ *   s3         — S3 + presigned URLs (managed AWS path, docs/DEPLOY.md)
+ *   cloudinary — raw + authenticated resources, signed download URLs
+ *                (shift plan: PDFs live in Cloudinary, see SHIFTPLAN.md)
  * Keys are POSIX-style: "exports/<exportId>.pdf".
- * Relative local roots are anchored to the monorepo root so the web app
- * and the worker (different cwd) always agree on where files live.
  */
 function resolveWorkspaceRoot(start: string): string {
   let dir = start;
@@ -112,20 +115,87 @@ class S3Driver implements StorageDriver {
   }
 }
 
+/**
+ * Cloudinary raw/authenticated driver — the shift-plan default for exports.
+ * Downloads use signed private URLs with a short TTL (same contract as the
+ * S3 presigner); nothing is ever publicly listable.
+ */
+class CloudinaryDriver implements StorageDriver {
+  constructor(cfg: { cloudName: string; apiKey: string; apiSecret: string }) {
+    cloudinary.config({
+      cloud_name: cfg.cloudName,
+      api_key: cfg.apiKey,
+      api_secret: cfg.apiSecret,
+      secure: true,
+    });
+  }
+
+  private privateUrl(key: string, ttlSeconds: number): string {
+    return cloudinary.utils.private_download_url(key, "pdf", {
+      resource_type: "raw",
+      expires_at: Math.floor(Date.now() / 1000) + ttlSeconds,
+      attachment: false,
+    });
+  }
+
+  async put(key: string, data: Buffer, contentType = "application/pdf"): Promise<void> {
+    await cloudinary.uploader.upload(`data:${contentType};base64,${data.toString("base64")}`, {
+      resource_type: "raw",
+      type: "authenticated",
+      public_id: key,
+      overwrite: true,
+      invalidate: true,
+    });
+  }
+
+  async get(key: string): Promise<Buffer> {
+    const res = await fetch(this.privateUrl(key, 300));
+    if (!res.ok) throw new Error(`Cloudinary GET failed (${res.status}) for ${key}`);
+    return Buffer.from(await res.arrayBuffer());
+  }
+
+  async delete(key: string): Promise<void> {
+    await cloudinary.uploader.destroy(key, {
+      resource_type: "raw",
+      type: "authenticated",
+      invalidate: true,
+    });
+  }
+
+  async downloadUrl(key: string): Promise<string> {
+    return this.privateUrl(key, 600); // 10 minutes, per plan §14
+  }
+}
+
 let driver: StorageDriver | null = null;
 
 export function getStorage(): StorageDriver {
   if (driver) return driver;
   const kind = process.env.STORAGE_DRIVER ?? "local";
-  driver =
-    kind === "s3" && process.env.S3_EXPORTS_BUCKET
-      ? new S3Driver(process.env.S3_EXPORTS_BUCKET, process.env.S3_REGION)
-      : new LocalDriver(process.env.LOCAL_EXPORTS_DIR ?? "./.data/exports");
+  if (kind === "s3" && process.env.S3_EXPORTS_BUCKET) {
+    driver = new S3Driver(process.env.S3_EXPORTS_BUCKET, process.env.S3_REGION);
+  } else if (
+    kind === "cloudinary" &&
+    process.env.CLOUDINARY_CLOUD_NAME &&
+    process.env.CLOUDINARY_API_KEY &&
+    process.env.CLOUDINARY_API_SECRET
+  ) {
+    driver = new CloudinaryDriver({
+      cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+      apiKey: process.env.CLOUDINARY_API_KEY,
+      apiSecret: process.env.CLOUDINARY_API_SECRET,
+    });
+  } else {
+    driver = new LocalDriver(process.env.LOCAL_EXPORTS_DIR ?? "./.data/exports");
+  }
   return driver;
 }
 
-export function storageKind(): "local" | "s3" {
-  return getStorage() instanceof S3Driver ? "s3" : "local";
+export function storageKind(): "local" | "s3" | "cloudinary" {
+  const d = getStorage();
+  if (d instanceof S3Driver) return "s3";
+  if (d instanceof CloudinaryDriver) return "cloudinary";
+  return "local";
 }
 
 /** Read-through helper used by the web download route for local dev. */
