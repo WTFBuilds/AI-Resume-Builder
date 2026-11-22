@@ -2,7 +2,6 @@
 
 import { Download, Loader2, Minus, Plus, RotateCcw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 import { renderResumeHtml } from "@airesume/templates/render";
 import { Button } from "@airesume/ui";
 import type { EditorStoreApi } from "./store";
@@ -10,8 +9,6 @@ import { useEditor } from "./store";
 
 const PAGE_W = 816; // 8.5in @96dpi — A4 is 794, close enough for fit-width
 const PAGE_H = 1056;
-
-type ExportState = "idle" | "rendering";
 
 export function PreviewPane({ store }: { store: EditorStoreApi }) {
   const data = useEditor(store, (s) => s.data);
@@ -22,10 +19,9 @@ export function PreviewPane({ store }: { store: EditorStoreApi }) {
   const [zoom, setZoom] = useState(1);
   const [fitWidth, setFitWidth] = useState(0);
   const [html, setHtml] = useState("");
-  const [exportState, setExportState] = useState<ExportState>("idle");
+  const [downloading, setDownloading] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const htmlTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // fit-to-width
   useEffect(() => {
@@ -53,60 +49,22 @@ export function PreviewPane({ store }: { store: EditorStoreApi }) {
   }, [targetHtml]);
 
   useEffect(
-    () => () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    },
+    () => () => {},
     [],
   );
 
   const scale = fitWidth > 0 ? (fitWidth / PAGE_W) * zoom : 0.5;
 
-  async function exportPdf() {
-    if (exportState === "rendering") return;
-    await store.getState().flush();
-    setExportState("rendering");
+  /** Synchronous render: the web route streams the worker's PDF. */
+  function downloadPdf() {
+    if (downloading) return;
+    setDownloading(true);
     try {
-      const res = await fetch(`/api/resumes/${resumeId}/export`, { method: "POST" });
-      const body = await res.json();
-      if (!res.ok) {
-        toast.error(body.error ?? "Could not start PDF export");
-        setExportState("idle");
-        return;
-      }
-      const exportId: string = body.exportId;
-      const startedAt = Date.now();
-      pollRef.current = setInterval(async () => {
-        try {
-          const r = await fetch(`/api/exports/${exportId}`);
-          const b = await r.json();
-          if (b.status === "done") {
-            stopPoll();
-            setExportState("idle");
-            toast.success("PDF ready — downloading");
-            window.location.href = `/api/exports/${exportId}/download`;
-          } else if (b.status === "failed") {
-            stopPoll();
-            setExportState("idle");
-            toast.error(b.error ?? "PDF rendering failed");
-          } else if (Date.now() - startedAt > 90_000) {
-            stopPoll();
-            setExportState("idle");
-            toast.error("Export timed out — try again");
-          }
-        } catch {
-          /* transient poll error — keep waiting */
-        }
-      }, 1500);
-    } catch {
-      toast.error("Could not start PDF export");
-      setExportState("idle");
-    }
-  }
-
-  function stopPoll() {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
+      store.getState().flush();
+      window.location.href = `/api/resumes/${resumeId}/pdf`;
+    } finally {
+      // navigation keeps this page alive; re-enable after a grace period
+      setTimeout(() => setDownloading(false), 6000);
     }
   }
 
@@ -144,13 +102,9 @@ export function PreviewPane({ store }: { store: EditorStoreApi }) {
           >
             <RotateCcw />
           </Button>
-          <Button size="sm" onClick={exportPdf} disabled={exportState === "rendering"} className="ml-1">
-            {exportState === "rendering" ? (
-              <Loader2 className="animate-spin" />
-            ) : (
-              <Download />
-            )}
-            {exportState === "rendering" ? "Rendering…" : "Download PDF"}
+          <Button size="sm" onClick={downloadPdf} disabled={downloading} className="ml-1">
+            {downloading ? <Loader2 className="animate-spin" /> : <Download />}
+            {downloading ? "Rendering…" : "Download PDF"}
           </Button>
         </div>
       </div>

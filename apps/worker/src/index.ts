@@ -1,64 +1,16 @@
 import "dotenv/config";
+import { createHmac } from "node:crypto";
+import http from "node:http";
 import { eq } from "drizzle-orm";
 import { Worker, type Job } from "bullmq";
 import Redis from "ioredis";
-import { db, schema, pruneExports, purgeTrashedOlderThan, updateExport, getExport } from "@airesume/db";
-import { getStorage } from "@airesume/storage";
+import { db, schema, purgeTrashedOlderThan } from "@airesume/db";
 import { htmlToPdf, resumeHtml } from "./pdf";
 
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
 const connection = new Redis(REDIS_URL, { maxRetriesPerRequest: null });
 
-console.log(`[airesume-worker] redis: ${REDIS_URL}`);
-
-/* ── export queue ────────────────────────────────────────────────────────── */
-
-async function handleExport(job: Job<{ exportId: string }>): Promise<void> {
-  const { exportId } = job.data;
-  const exportRow = await getExport(exportId);
-  if (exportRow.status === "done") return;
-
-  const rows = await db.select().from(schema.resume).where(eq(schema.resume.id, exportRow.resumeId));
-  const resume = rows[0];
-  if (!resume) {
-    await updateExport(exportId, { status: "failed", error: "Resume not found" });
-    return;
-  }
-
-  await updateExport(exportId, { status: "rendering" });
-  const startedAt = Date.now();
-
-  try {
-    const html = resumeHtml(
-      resume.data as Parameters<typeof resumeHtml>[0],
-      resume.config as Parameters<typeof resumeHtml>[1],
-      resume.templateId,
-    );
-    const pdf = await htmlToPdf(html);
-    const key = `exports/${exportId}.pdf`;
-    await getStorage().put(key, pdf, "application/pdf");
-    await updateExport(exportId, { status: "done", storageKey: key, completedAt: new Date() });
-    console.log(`[export ${exportId}] done in ${Date.now() - startedAt}ms (${pdf.length} bytes)`);
-
-    // keep the latest 10 exports per resume; delete evicted files
-    const evicted = await pruneExports(resume.id, 10);
-    await Promise.all(evicted.map((k) => getStorage().delete(k)));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`[export ${exportId}] failed:`, message);
-    await updateExport(exportId, { status: "failed", error: message, completedAt: new Date() });
-    throw err; // let BullMQ retry per job attempts
-  }
-}
-
-const exportWorker = new Worker("airesume", handleExport, {
-  connection,
-  prefix: "airesume",
-  concurrency: Number(process.env.WORKER_CONCURRENCY ?? 2),
-});
-exportWorker.on("failed", (job, err) => {
-  console.error(`[worker] export job ${job?.id} failed (attempt ${job?.attemptsMade}):`, err.message);
-});
+console.log(`[airesume-worker] redis: ${REDIS_URL.replace(/:[^@]*@/, ":***@")}`);
 
 /* ── maintenance queue (trash purge) ─────────────────────────────────────── */
 
@@ -82,14 +34,82 @@ async function registerRepeatables(): Promise<void> {
   await q.close();
 }
 
+/* ── render server ─────────────────────────────────────────────────────────
+ * GET /pdf/:resumeId?t=<hmac>&e=<expiry-epoch-seconds>
+ *
+ * The web app verifies the session + ownership, then signs a 10-minute HMAC
+ * token (INTERNAL_TOKEN shared with this worker) and streams the render
+ * through to the user. PDFs are rendered on demand from the document in
+ * Postgres — nothing is stored on disk.
+ */
+const RENDER_PORT = Number(process.env.WORKER_PORT ?? 3001);
+const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN ?? "";
+
+const renderServer = http.createServer(async (req, res) => {
+  const url = new URL(req.url ?? "/", "http://localhost");
+  const match = url.pathname.match(/^\/pdf\/([0-9a-f-]{36})$/);
+
+  if (!INTERNAL_TOKEN || !match) {
+    res.writeHead(404).end();
+    return;
+  }
+  const resumeId = match[1];
+  const expiry = Number(url.searchParams.get("e") ?? 0);
+  const token = url.searchParams.get("t") ?? "";
+
+  if (!expiry || expiry < Math.floor(Date.now() / 1000)) {
+    res.writeHead(403).end("expired");
+    return;
+  }
+  const expected = createHmac("sha256", INTERNAL_TOKEN).update(`${resumeId}.${expiry}`).digest("hex");
+  if (token !== expected) {
+    res.writeHead(403).end("bad token");
+    return;
+  }
+
+  const startedAt = Date.now();
+  try {
+    const rows = await db.select().from(schema.resume).where(eq(schema.resume.id, resumeId));
+    const resume = rows[0];
+    if (!resume || resume.status === "trashed") {
+      res.writeHead(404).end("not found");
+      return;
+    }
+
+    const html = resumeHtml(
+      resume.data as Parameters<typeof resumeHtml>[0],
+      resume.config as Parameters<typeof resumeHtml>[1],
+      resume.templateId,
+    );
+    const pdf = await htmlToPdf(html);
+    console.log(`[render ${resumeId}] done in ${Date.now() - startedAt}ms (${pdf.length} bytes)`);
+
+    res.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="airesume-${resumeId}.pdf"`,
+      "Cache-Control": "private, no-store",
+    });
+    res.end(pdf);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[render ${resumeId}] failed:`, message);
+    if (!res.headersSent) res.writeHead(500).end("render failed");
+    else res.end();
+  }
+});
+
+renderServer.listen(RENDER_PORT, () => {
+  console.log(`[airesume-worker] render server on :${RENDER_PORT}`);
+});
+
 /* ── lifecycle ───────────────────────────────────────────────────────────── */
 
 await registerRepeatables();
-console.log("[airesume-worker] ready — queues: exports, maintenance");
+console.log("[airesume-worker] ready — render server + maintenance");
 
 async function shutdown(signal: string) {
   console.log(`[airesume-worker] ${signal} — closing workers…`);
-  await Promise.allSettled([exportWorker.close(), maintenanceWorker.close()]);
+  await Promise.allSettled([maintenanceWorker.close(), renderServer.close()]);
   connection.disconnect();
   process.exit(0);
 }
