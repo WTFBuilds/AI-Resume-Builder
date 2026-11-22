@@ -1,7 +1,9 @@
 import { config } from "dotenv";
 // Scripts and workers load this module directly — make sure the repo-root
 // .env is present regardless of process.cwd() (Next.js loads it itself).
-config({ path: new URL("../../../.env", import.meta.url) });
+// webpackIgnore keeps webpack from trying to bundle the .env file — CI has
+// none (gitignored) and receives env vars through the environment instead.
+config({ path: new URL(/* webpackIgnore: true */ "../../../.env", import.meta.url) });
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema";
