@@ -1,0 +1,21 @@
+[Unit]
+Description=AIResume export worker (BullMQ + Puppeteer)
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=airesume
+Group=airesume
+WorkingDirectory=/opt/airesume
+EnvironmentFile=/opt/airesume/.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/pnpm --filter @airesume/worker start
+Restart=always
+RestartSec=5
+# Chromium headroom guard — protects the other project sharing this box
+MemoryMax=1536M
+Nice=5
+
+[Install]
+WantedBy=multi-user.target
