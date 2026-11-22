@@ -11,13 +11,12 @@ import { v2 as cloudinary } from "cloudinary";
 
 /**
  * Storage abstraction:
- *   local      — filesystem (dev), anchored to the monorepo root
+ *   local      — filesystem (dev AND shift-plan worker; PDFs stay on the EC2)
+ *   cloudinary — raw + authenticated resources (optional scale-up)
  *   s3         — S3 + presigned URLs (managed AWS path, docs/DEPLOY.md)
- *   cloudinary — raw + authenticated resources, signed download URLs
- *                (shift plan: PDFs live in Cloudinary, see SHIFTPLAN.md)
  * Keys are POSIX-style: "exports/<exportId>.pdf".
  */
-function resolveWorkspaceRoot(start: string): string {
+export function resolveWorkspaceRoot(start: string): string {
   let dir = start;
   while (dir !== path.dirname(dir)) {
     if (existsSync(path.join(dir, "pnpm-workspace.yaml"))) return dir;

@@ -20,15 +20,18 @@ export async function GET(req: Request) {
       status,
       q: url.searchParams.get("q") ?? undefined,
     });
-    return NextResponse.json({
-      resumes: items.map((r) => ({
-        id: r.id,
-        title: r.title,
-        templateId: r.templateId,
-        status: r.status,
-        updatedAt: r.updatedAt.toISOString(),
-      })),
-    });
+    return NextResponse.json(
+      {
+        resumes: items.map((r) => ({
+          id: r.id,
+          title: r.title,
+          templateId: r.templateId,
+          status: r.status,
+          updatedAt: r.updatedAt.toISOString(),
+        })),
+      },
+      { headers: { "Cache-Control": "private, no-store" } },
+    );
   } catch (err) {
     return handleApiError(err);
   }

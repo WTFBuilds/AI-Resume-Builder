@@ -14,30 +14,27 @@ for when scale demands it.
 ```
                         ┌──────────────────────────┐
    users ──▶ Vercel ────▶  web (Next.js, serverless) │──┐
-             (app + API + marketing)                   │  │
-                                                       │  │
+             (app + API + marketing)                   │  │ enqueues jobs
+                                                       │  │ + proxies PDFs
                                                        ▼  ▼
                               ┌─────────────────────────────────────┐
-                              │  existing EC2 instance (your box)   │
+                              │  EC2 instance (AIResume)            │
                               │                                     │
                               │  PostgreSQL 16  ◀──── app data      │
                               │  Redis 7       ◀──── BullMQ + cache │
                               │  worker (AIResume) ◀─ PDF rendering │
-                              │  (your other project + nginx live   │
-                              │   here too — untouched)             │
-                              └───────────────┬─────────────────────┘
-                                              │ signed URLs
-                                              ▼
-                              Cloudinary (exported PDFs, authenticated)
+                              │       └─ download server :3001      │
+                              │           (serves PDFs, HMAC-gated) │
+                              └─────────────────────────────────────┘
 ```
 
 | Piece | Runs on | Why |
 |---|---|---|
 | **web** (Next.js: marketing + app + API routes) | **Vercel** | Native Next.js hosting, zero-ops, free tier, preview deploys per PR |
-| **worker** (BullMQ consumer + Puppeteer) | **EC2** (systemd service) | Long-running Chromium can't live on serverless; your box is already warm |
-| **PostgreSQL** | **EC2** (existing install) | Already there; one more database costs nothing |
-| **Redis** | **EC2** (existing install) | Already there; queue + better-auth cookie cache + rate limits |
-| **PDF storage** | **Cloudinary** (`authenticated` resources, signed download URLs) | Zero-infra file storage; driver already implemented in code |
+| **worker** (BullMQ consumer + Puppeteer + download server) | **EC2** (systemd service) | Long-running Chromium can't live on serverless |
+| **PostgreSQL** | **EC2** | Already there; one more database costs nothing |
+| **Redis** | **EC2** | Already there; queue + better-auth cookie cache + rate limits |
+| **PDF storage** | **EC2 local disk** — no third party | Worker saves to local disk and serves downloads itself through a signed URL; the web app proxies. Cloudinary/S3 drivers remain in the codebase for scale-up |
 | Email | dev: console · prod: Resend (free 3k/mo) — SES deferred with the rest of AWS | — |
 
 **Cost:** Vercel Hobby $0 · EC2 already paid · Cloudinary free tier $0.
@@ -67,14 +64,15 @@ Effective new spend: **₹0 / $0**.
 3. **Root Directory: `apps/web`** (framework preset auto-detects Next.js).
 4. Environment variables (Production + Preview):
    ```
-   DATABASE_URL            = postgres://airesume:<PASS>@<EC2_IP>:5432/airesume
+   DATABASE_URL            = postgres://airesume:<PASS>@<EC2_IP>:5432/airesume?sslmode=require&uselibpqcompat=true
    REDIS_URL               = redis://:<PASS>@<EC2_IP>:6379
    BETTER_AUTH_SECRET      = <32-byte random, generate: openssl rand -base64 32>
    BETTER_AUTH_URL         = https://<your-app>.vercel.app
    NEXT_PUBLIC_APP_URL     = https://<your-app>.vercel.app
    REQUIRE_EMAIL_VERIFICATION = false
-   STORAGE_DRIVER          = cloudinary
-   CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET
+   STORAGE_DRIVER          = local
+   INTERNAL_TOKEN          = <48-char random — SAME value on the worker>
+   WORKER_DOWNLOAD_URL     = http://<EC2_ELASTIC_IP>:3001
    GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET      (when ready)
    NEXT_PUBLIC_GOOGLE_OAUTH = true               (when ready)
    ```
