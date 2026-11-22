@@ -1,0 +1,5 @@
+{
+  "extends": "@airesume/config/tsconfig.react.json",
+  "include": ["src/**/*.ts"]
+}
+

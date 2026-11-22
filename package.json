@@ -1,0 +1,24 @@
+{
+  "name": "airesume",
+  "private": true,
+  "packageManager": "pnpm@12.21.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "turbo run dev --parallel",
+    "dev:web": "turbo run dev --filter=@airesume/web",
+    "dev:worker": "turbo run dev --filter=@airesume/worker",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "turbo run db:generate --filter=@airesume/db",
+    "db:push": "turbo run db:push --filter=@airesume/db",
+    "db:migrate": "turbo run db:migrate --filter=@airesume/db",
+    "db:seed": "turbo run db:seed --filter=@airesume/db"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.0",
+    "typescript": "^5.7.0"
+  }
+}
