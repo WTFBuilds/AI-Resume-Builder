@@ -1,25 +1,49 @@
-import puppeteer from "puppeteer";
+import puppeteer, { type Browser } from "puppeteer";
 import { renderResumeHtml } from "@airesume/templates/render";
 import type { ResumeConfig, ResumeData } from "@airesume/templates";
 
 /**
- * Print a resume HTML document to PDF. The input HTML comes from the same
- * renderResumeHtml() used by the live preview — output is pixel-identical
- * by construction (plan §11).
+ * Persistent Chromium: launched once and reused across renders (a fresh
+ * launch costs 2–4 s on a 1-vCPU box). Pages are opened/closed per render;
+ * the browser is relaunched automatically if it crashes or disconnects.
  */
-export async function htmlToPdf(html: string): Promise<Buffer> {
-  const browser = await puppeteer.launch({
+let browserPromise: Promise<Browser> | null = null;
+
+function launchBrowser(): Promise<Browser> {
+  const promise = puppeteer.launch({
     headless: true,
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
+      "--disable-gpu",
       "--font-render-hinting=none",
     ],
   });
+  promise.then(
+    (browser) =>
+      browser.on("disconnected", async () => {
+        if ((await browserPromise) === browser) browserPromise = null;
+      }),
+    () => {
+      browserPromise = null;
+    },
+  );
+  return promise;
+}
+
+function getBrowser(): Promise<Browser> {
+  if (!browserPromise) {
+    browserPromise = launchBrowser();
+  }
+  return browserPromise;
+}
+
+export async function htmlToPdf(html: string): Promise<Buffer> {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
   try {
-    const page = await browser.newPage();
-    // html is fully self-contained (inline CSS, no network resources)
+    // html is fully self-contained (inline CSS + embedded fonts, no network)
     await page.setContent(html, { waitUntil: "load", timeout: 30000 });
     const pdf = await page.pdf({
       preferCSSPageSize: true, // honors @page size from the template
@@ -29,7 +53,7 @@ export async function htmlToPdf(html: string): Promise<Buffer> {
     });
     return Buffer.from(pdf);
   } finally {
-    await browser.close();
+    await page.close().catch(() => {});
   }
 }
 

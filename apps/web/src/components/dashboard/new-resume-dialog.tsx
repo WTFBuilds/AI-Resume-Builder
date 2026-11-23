@@ -10,8 +10,10 @@ import { ResumePreviewFrame } from "@/components/marketing/resume-preview-frame"
 
 /**
  * Template picker — the "New project" flow of the dashboard.
- * `initialTemplate` preselects a card (e.g. arriving from /templates?new=slug).
- * Also accepts a JSON import (AIResume export / JSON-Resume-ish).
+ * One live preview iframe (for the SELECTED template only) + compact
+ * selector buttons, so typing in the title never re-renders heavy iframes.
+ * The title input is deliberately UNCONTROLLED (ref) — zero React work per
+ * keystroke. Also accepts a JSON import (AIResume / JSON-Resume).
  */
 export function NewResumeDialog({
   open,
@@ -24,14 +26,18 @@ export function NewResumeDialog({
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<string>("classic");
-  const [title, setTitle] = useState("");
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  const titleRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open && initialTemplate) setSelected(initialTemplate);
   }, [open, initialTemplate]);
+
+  function getTitle() {
+    return titleRef.current?.value.trim() || "Untitled resume";
+  }
 
   function finish(body: { id: string }) {
     onOpenChange(false);
@@ -44,7 +50,7 @@ export function NewResumeDialog({
       const res = await fetch("/api/resumes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ templateId: selected, title: title.trim() || "Untitled resume" }),
+        body: JSON.stringify({ templateId: selected, title: getTitle() }),
       });
       const body = await res.json();
       if (!res.ok) {
@@ -68,7 +74,6 @@ export function NewResumeDialog({
         toast.error("That file isn't valid JSON");
         return;
       }
-      // Accept both an AIResume export ({data, title, …}) and a bare document
       const payload =
         typeof parsed === "object" && parsed !== null && "data" in parsed
           ? (parsed as { data?: unknown; title?: string })
@@ -77,7 +82,7 @@ export function NewResumeDialog({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: payload.title ?? (title.trim() || file.name.replace(/\.json$/i, "")),
+          title: payload.title ?? (getTitle() !== "Untitled resume" ? getTitle() : file.name.replace(/\.json$/i, "")),
           templateId: selected,
           data: payload.data,
         }),
@@ -93,6 +98,8 @@ export function NewResumeDialog({
       setImporting(false);
     }
   }
+
+  const selectedTpl = TEMPLATE_LIST.find((t) => t.slug === selected) ?? TEMPLATE_LIST[0];
 
   return (
     <Dialog
@@ -112,63 +119,69 @@ export function NewResumeDialog({
         </>
       }
     >
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-[1fr_240px]">
+        <div className="space-y-1.5">
           {TEMPLATE_LIST.map((tpl) => (
             <button
               key={tpl.slug}
               type="button"
               onClick={() => setSelected(tpl.slug)}
               className={[
-                "overflow-hidden rounded-(--radius) border text-left transition-all",
+                "w-full rounded-(--radius) border px-3 py-2 text-left transition-colors",
                 selected === tpl.slug
-                  ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/25"
-                  : "border-[var(--line)] hover:border-[var(--line-strong)]",
+                  ? "border-[var(--accent)] bg-[var(--accent-soft)]"
+                  : "border-[var(--line)] hover:border-[var(--line-strong)] hover:bg-[var(--surface-2)]",
               ].join(" ")}
               aria-pressed={selected === tpl.slug}
             >
-              <ResumePreviewFrame templateSlug={tpl.slug} chrome={false} scale={0.165} />
-              <div className="px-2 py-1.5 text-[11px] font-medium text-[var(--ink)]">{tpl.name}</div>
+              <div className="text-[13px] font-medium text-[var(--ink)]">{tpl.name}</div>
+              <div className="truncate text-[11px] text-[var(--muted)]">{tpl.category}</div>
             </button>
           ))}
+
+          <div className="space-y-1.5 pt-2">
+            <Input
+              data-autofocus
+              ref={titleRef}
+              placeholder="Resume title (e.g. Software Engineer — 2026)"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") create();
+              }}
+            />
+            <p className="text-[11px] text-[var(--muted)]">
+              Internal name only — employers never see it.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 border-t border-[var(--line)] pt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => fileRef.current?.click()}
+              disabled={importing}
+            >
+              {importing ? <Loader2 className="animate-spin" /> : <Braces />} Import JSON
+            </Button>
+            <span className="text-[11px] text-[var(--muted)]">AIResume or JSON-Resume file.</span>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void importJson(file);
+                e.target.value = "";
+              }}
+            />
+          </div>
         </div>
-        <div className="space-y-1.5">
-          <Input
-            data-autofocus
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Resume title (e.g. Software Engineer — 2026)"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") create();
-            }}
-          />
-          <p className="text-[11px] text-[var(--muted)]">
-            Internal name only — employers never see it.
+
+        <div>
+          <ResumePreviewFrame templateSlug={selectedTpl.slug} chrome={false} scale={0.22} />
+          <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-[var(--muted)]">
+            {selectedTpl.description}
           </p>
-        </div>
-        <div className="flex items-center gap-3 border-t border-[var(--line)] pt-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => fileRef.current?.click()}
-            disabled={importing}
-          >
-            {importing ? <Loader2 className="animate-spin" /> : <Braces />} Import JSON
-          </Button>
-          <span className="text-[11px] text-[var(--muted)]">
-            Bring in an AIResume export or a JSON-Resume file.
-          </span>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".json,application/json"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void importJson(file);
-              e.target.value = "";
-            }}
-          />
         </div>
       </div>
     </Dialog>

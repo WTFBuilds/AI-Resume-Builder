@@ -381,6 +381,23 @@ export async function listTagsForResume(resumeId: string): Promise<TagRow[]> {
     .then((rows) => rows.map((r) => r.t));
 }
 
+/** All tags for every resume of a user — one query (avoids dashboard N+1). */
+export async function listTagsForAllResumes(userId: string): Promise<Map<string, TagRow[]>> {
+  const rows = await db
+    .select({ resumeId: resumeTag.resumeId, tag })
+    .from(resumeTag)
+    .innerJoin(tag, eq(tag.id, resumeTag.tagId))
+    .innerJoin(resume, eq(resume.id, resumeTag.resumeId))
+    .where(eq(resume.userId, userId));
+  const map = new Map<string, TagRow[]>();
+  for (const row of rows) {
+    const list = map.get(row.resumeId) ?? [];
+    list.push(row.tag);
+    map.set(row.resumeId, list);
+  }
+  return map;
+}
+
 export async function setResumeTags(
   userId: string,
   resumeId: string,
